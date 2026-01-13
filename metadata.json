@@ -1,5 +1,5 @@
 {
-  "name": "样本数据扩增神器",
+  "name": "样本数据扩增神器-双引擎",
   "description": "基于双引擎架构（物理仿真与生成式重绘）的电力设备样本自动扩增系统，专为工业巡检 YOLO 训练集优化。",
   "requestFramePermissions": [
     "camera"

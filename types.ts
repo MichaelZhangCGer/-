@@ -20,4 +20,6 @@ export interface GeneratedSample {
 
 export interface AppConfig {
   batchSize: number;
+  physicalStrength: number; // 0-100
+  generativeStrength: number; // 0-100
 }
