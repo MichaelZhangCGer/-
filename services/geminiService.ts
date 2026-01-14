@@ -25,11 +25,12 @@ export class GeminiService {
          CRITICAL: You MUST preserve the exact pixel-level geometry and structure of the power equipment (transformers, insulators, wires, poles). 
          Do NOT add, remove, or morph any parts of the equipment. Only change the lighting, weather, noise, and environmental atmospheric effects.
          The resulting image should look like the equipment was photographed in ${effect.name} conditions with ${strength}% effect visibility.`
-      : `You are a generative creative AI. 
+      : `You are a generative creative AI for industrial augmentation. 
          Task: Reimagine this power equipment in a ${effect.name} scenario. 
          Enhance the visual style with ${effect.promptMod}. 
-         The style transformation level is ${strength}% (higher means more artistic and creative changes to the environment). 
-         Create a realistic and professional industrial scene.`;
+         The style transformation level is ${strength}% (higher means more variation in background and environmental lighting). 
+         CRITICAL: While reimagining the environment, the core identity and identifiable features of the industrial equipment MUST remain recognizable. 
+         Do not turn the equipment into abstract shapes. Maintain industrial high-fidelity.`;
 
     const prompt = `Augment this image with ${effect.promptMod}. Effect intensity: ${strength}%. Ensure professional industrial high-fidelity results.`;
 

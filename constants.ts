@@ -12,9 +12,9 @@ export const SAFE_EFFECTS: AugmentationEffect[] = [
 ];
 
 export const GEN_EFFECTS: AugmentationEffect[] = [
-  { id: 'rust', name: '严重锈蚀', description: '模拟长期未维护状态', promptMod: 'heavily rusted metal surfaces, oxidation, corrosion details' },
-  { id: 'cyber', name: '赛博朋克', description: '霓虹灯效背景切换', promptMod: 'cyberpunk city background, neon lights reflection, futuristic aesthetic' },
-  { id: 'overgrown', name: '植被侵入', description: '模拟荒野基站', promptMod: 'overgrown by vines, forest background, abandoned equipment look' },
-  { id: 'sandstorm', name: '沙尘暴', description: '极端戈壁环境', promptMod: 'heavy sandstorm, yellow orange atmosphere, desert dust' },
-  { id: 'ice', name: '严重冰封', description: '模拟北方寒冬冰柱', promptMod: 'thick ice coating, frozen icicles hanging from structure' }
+  { id: 'rust_normal', name: '正常锈蚀', description: '模拟设备自然老化过程', promptMod: 'mild surface rust, light oxidation spots, realistic industrial weathering on metal parts' },
+  { id: 'pollution', name: '表面污秽', description: '模拟绝缘子或金属件盐雾污秽', promptMod: 'industrial pollution buildup, grey salt mist coating, grimy surfaces, environmental residue' },
+  { id: 'aging_discoloration', name: '老旧变色', description: '长期户外曝晒导致褪色', promptMod: 'faded and sun-bleached paint, yellowish or greyish surface discoloration, long-term outdoor exposure patina' },
+  { id: 'surface_cracks', name: '表面裂纹', description: '结构疲劳裂痕', promptMod: 'visible surface cracks, structural fatigue fissures on components, hairline fractures' },
+  { id: 'paint_cracking', name: '变色皲裂', description: '表面涂层老化及微小裂纹', promptMod: 'discolored and sun-damaged surfaces, fine network of cracks in paint, peeling coating, industrial aging' }
 ];
