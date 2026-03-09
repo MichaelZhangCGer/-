@@ -27,7 +27,10 @@ import {
   Server,
   Clock,
   LayoutGrid,
-  FileJson
+  FileJson,
+  AlertCircle,
+  History,
+  Coffee
 } from 'lucide-react';
 import { AugmentationMode, AugmentationEffect, GeneratedSample, AppConfig } from './types';
 import { SAFE_EFFECTS, GEN_EFFECTS } from './constants';
@@ -44,10 +47,11 @@ const App: React.FC = () => {
   const [config, setConfig] = useState<AppConfig>({
     batchSize: 10,
     physicalStrength: 50,
-    generativeStrength: 40 // 默认强度下调，保持与原图更高的一致性
+    generativeStrength: 40 
   });
   const [progress, setProgress] = useState(0);
   const [currentTask, setCurrentTask] = useState('');
+  const [errorDetail, setErrorDetail] = useState<{message: string, model: string, status?: string} | null>(null);
 
   const TASK_MESSAGES = [
     '正在分析原始样本结构...',
@@ -69,7 +73,6 @@ const App: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [viewerIndex, samples.length]);
 
-  // 任务消息轮播逻辑
   useEffect(() => {
     let interval: number;
     if (isGenerating) {
@@ -100,6 +103,7 @@ const App: React.FC = () => {
       const b64 = await fileToBase64(file);
       setSourceImage(b64);
       setSamples([]);
+      setErrorDetail(null);
     }
   };
 
@@ -109,6 +113,7 @@ const App: React.FC = () => {
     setIsGenerating(true);
     setSamples([]);
     setProgress(0);
+    setErrorDetail(null);
 
     const service = new GeminiService();
     const newSamples: GeneratedSample[] = [];
@@ -131,21 +136,29 @@ const App: React.FC = () => {
         setProgress(newProgress);
       }
       setSamples(newSamples);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Batch Augmentation Failed:", error);
-      alert("生成失败，请检查网络连接或 API 配额。");
+      setErrorDetail({
+        message: error.message || "服务请求未响应",
+        model: error.model || "gemini-2.5-flash-image",
+        status: error.status
+      });
     } finally {
       setIsGenerating(false);
     }
   };
 
-  // 进度条常量计算 - 统一使用 r=64
+  const resetAll = () => {
+    setSamples([]);
+    setErrorDetail(null);
+    setProgress(0);
+  };
+
   const ringRadius = 64;
   const ringCircumference = 2 * Math.PI * ringRadius;
 
   return (
     <div className="min-h-screen pb-24 relative selection:bg-cyan-500/30">
-      {/* Header */}
       <header className="sticky top-0 z-40 glass-card border-b border-cyan-500/30 px-4 md:px-6 py-3 md:py-4 flex items-center justify-between">
         <div className="flex items-center gap-3 md:gap-4">
           <div className="relative group shrink-0">
@@ -168,20 +181,18 @@ const App: React.FC = () => {
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2 md:gap-4">
-          <div className={`px-2 md:px-4 py-1 md:py-1.5 rounded-full text-[10px] md:text-xs font-bold border transition-all shadow-lg ${
-            mode === AugmentationMode.SAFE_PHYSICAL 
-            ? 'border-cyan-500/50 text-cyan-400 bg-cyan-500/5' 
-            : 'border-purple-500/50 text-purple-400 bg-purple-500/5'
-          }`}>
-            <span className="hidden sm:inline opacity-50 mr-2 text-slate-500 font-normal">Active Engine:</span>
-            {mode === AugmentationMode.SAFE_PHYSICAL ? '物理模式' : 'AI模式'}
-          </div>
+
+        <div className={`hidden md:flex items-center gap-2 px-4 py-1.5 rounded-full border bg-slate-900/80 text-xs font-bold transition-colors shadow-inner ${
+          mode === AugmentationMode.SAFE_PHYSICAL 
+            ? 'border-cyan-500/30 text-cyan-400' 
+            : 'border-purple-500/30 text-purple-400'
+        }`}>
+          <span className="text-slate-500 font-medium">Active Engine:</span>
+          {mode === AugmentationMode.SAFE_PHYSICAL ? '物理模式' : '生成模式'}
         </div>
       </header>
 
       <main className="max-w-7xl mx-auto px-4 md:px-6 py-6 md:py-8 grid grid-cols-1 lg:grid-cols-12 gap-6 md:gap-8">
-        {/* Left Column - Controls */}
         <div className="lg:col-span-4 space-y-6">
           <section className="glass-card rounded-2xl p-4 md:p-6 relative overflow-hidden shadow-xl border border-white/5">
             <h2 className="text-md md:text-lg font-semibold mb-4 flex items-center gap-2 text-slate-100">
@@ -257,7 +268,7 @@ const App: React.FC = () => {
             >
               <div className="flex items-center gap-2 text-xs md:text-sm font-medium">
                 <Settings size={16} />
-                高级开发者参数
+                高级参数
               </div>
               {showAdvanced ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
             </button>
@@ -276,14 +287,14 @@ const App: React.FC = () => {
                     className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-cyan-500"
                   />
                 </div>
-
+                
                 <div>
                   <div className="flex justify-between items-center mb-1.5">
                     <label className="block text-[10px] md:text-xs text-slate-400 font-medium">仿真干预强度</label>
                     <span className="text-cyan-400 font-mono font-bold text-[10px] bg-cyan-400/10 px-1.5 py-0.5 rounded">{config.physicalStrength}%</span>
                   </div>
                   <input 
-                    type="range" min="5" max="100" step="5" 
+                    type="range" min="0" max="100" step="1" 
                     value={config.physicalStrength}
                     onChange={(e) => setConfig({...config, physicalStrength: parseInt(e.target.value)})}
                     className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-cyan-500"
@@ -296,7 +307,7 @@ const App: React.FC = () => {
                     <span className="text-purple-400 font-mono font-bold text-[10px] bg-purple-400/10 px-1.5 py-0.5 rounded">{config.generativeStrength}%</span>
                   </div>
                   <input 
-                    type="range" min="5" max="100" step="5" 
+                    type="range" min="0" max="100" step="1" 
                     value={config.generativeStrength}
                     onChange={(e) => setConfig({...config, generativeStrength: parseInt(e.target.value)})}
                     className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-purple-500"
@@ -319,7 +330,7 @@ const App: React.FC = () => {
               <div className="flex flex-col items-center">
                 <div className="flex items-center gap-3">
                   <Loader2 className="animate-spin" size={18} />
-                  <span className="tracking-tight uppercase text-xs md:text-sm">Neural Processing...</span>
+                  <span className="tracking-tight uppercase text-xs md:text-sm">计算处理中...</span>
                 </div>
               </div>
             ) : (
@@ -331,15 +342,14 @@ const App: React.FC = () => {
           </button>
         </div>
 
-        {/* Right Column - Results */}
         <div className="lg:col-span-8 space-y-6">
-          <section className="glass-card rounded-2xl p-4 md:p-6 min-h-[400px] md:min-h-[600px] flex flex-col shadow-2xl border border-white/5 relative">
+          <section className="glass-card rounded-2xl p-4 md:p-6 min-h-[400px] md:min-h-[600px] flex flex-col shadow-2xl border border-white/5 relative overflow-hidden">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 md:mb-8">
               <div className="space-y-1">
                 <h2 className="text-lg md:text-xl font-bold tracking-tight text-white flex items-center gap-2 md:gap-3">
                   扩增结果预览库
                   <span className="text-[9px] md:text-[10px] font-mono font-black bg-cyan-500/20 text-cyan-400 px-2 md:px-2.5 py-0.5 md:py-1 rounded-full border border-cyan-500/20">
-                    SAMPLES: {samples.length}
+                    COUNT: {samples.length}
                   </span>
                 </h2>
               </div>
@@ -349,10 +359,74 @@ const App: React.FC = () => {
                   className="w-full sm:w-auto flex items-center justify-center gap-2 text-[10px] md:text-xs font-black text-cyan-400 hover:text-cyan-300 transition-all bg-white/5 px-4 md:px-5 py-2 md:py-2.5 rounded-xl border border-white/10 hover:border-cyan-400/40"
                 >
                   <Download size={14} />
-                  打包导出样本 (PNG)
+                  批量导出样本 (PNG)
                 </button>
               )}
             </div>
+
+            {/* 人性化错误提示区域 */}
+            {errorDetail && (
+              <div className="mb-6 p-6 rounded-3xl bg-orange-500/10 border border-orange-500/30 flex flex-col md:flex-row items-center md:items-start gap-6 animate-in slide-in-from-top duration-700 shadow-2xl">
+                <div className="p-4 bg-orange-500 rounded-2xl text-white shadow-xl shadow-orange-500/20">
+                  <Coffee size={32} strokeWidth={2.5} />
+                </div>
+                <div className="flex-1 text-center md:text-left">
+                  <h3 className="text-xl font-black text-orange-400 mb-2 tracking-tight">
+                    扩增任务排队中 (资源暂时超限)
+                  </h3>
+                  <div className="space-y-4 mb-6 text-slate-300 text-sm md:text-base leading-relaxed font-medium">
+                    <p>
+                      抱歉，当前的 AI 扩增算力已达到免费阶段的最大负荷。这通常是由于短时间内请求过多触发了系统保护。
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="p-3 bg-black/40 rounded-2xl border border-white/5 flex items-start gap-3">
+                        <Clock className="text-orange-500 shrink-0 mt-1" size={16} />
+                        <span className="text-xs"><strong>等待 60 秒：</strong> 大多数情况下，稍等片刻即可恢复计算。</span>
+                      </div>
+                      <div className="p-3 bg-black/40 rounded-2xl border border-white/5 flex items-start gap-3">
+                        <Calendar className="text-orange-500 shrink-0 mt-1" size={16} />
+                        <span className="text-xs"><strong>明天再试：</strong> 如果持续报错，说明今日免费额度已耗尽。</span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="flex flex-wrap items-center justify-center md:justify-start gap-3">
+                    <button 
+                      onClick={startAugmentation}
+                      className="px-6 py-2.5 bg-orange-500 text-white font-black rounded-xl text-xs hover:bg-orange-400 transition-all active:scale-95 shadow-lg shadow-orange-500/20"
+                    >
+                      重新尝试
+                    </button>
+                    <button 
+                      onClick={resetAll}
+                      className="px-6 py-2.5 bg-white/5 text-slate-400 font-bold rounded-xl text-xs hover:text-white hover:bg-white/10 transition-all"
+                    >
+                      清空并重置
+                    </button>
+
+                    <details className="mt-2 w-full">
+                      <summary className="text-[10px] font-bold text-slate-600 uppercase tracking-widest cursor-pointer list-none flex items-center justify-center md:justify-start gap-1 hover:text-slate-400 transition-colors">
+                        <ChevronRight size={10} className="transition-transform" />
+                        查看技术详情 (仅供工程师)
+                      </summary>
+                      <div className="mt-3 bg-black/80 rounded-2xl p-4 font-mono text-[10px] text-slate-500 border border-white/5 leading-loose">
+                        <div className="flex gap-2"><span className="text-slate-700">STATUS:</span> {errorDetail.status}</div>
+                        <div className="flex gap-2"><span className="text-slate-700">ENGINE:</span> {errorDetail.model}</div>
+                        <div className="mt-2 text-slate-600 italic break-words">
+                          RAW_RESP: {errorDetail.message}
+                        </div>
+                      </div>
+                    </details>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setErrorDetail(null)} 
+                  className="hidden md:block p-2 text-slate-600 hover:text-white transition-colors"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+            )}
 
             {samples.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5 overflow-y-auto max-h-[500px] md:max-h-[700px] pr-2 custom-scrollbar">
@@ -360,16 +434,13 @@ const App: React.FC = () => {
                   <div key={sample.id} className="group relative glass-card rounded-2xl overflow-hidden border border-slate-700/50 hover:border-cyan-500/40 transition-all cursor-pointer shadow-lg animate-in zoom-in-95 duration-300">
                     <div className="relative aspect-video overflow-hidden" onClick={() => setViewerIndex(index)}>
                       <img src={sample.url} alt={sample.effect} className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110" />
-                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center backdrop-blur-[1px]">
-                        <Maximize2 className="text-white scale-75 group-hover:scale-100 transition-transform duration-300" size={28} />
-                      </div>
                     </div>
                     <div className="p-3 md:p-4 bg-slate-900/90 flex items-center justify-between">
                       <div className="flex flex-col gap-0.5">
                         <span className="text-[9px] md:text-[10px] font-black tracking-widest text-slate-500 uppercase">Aug_Sample_{index + 1}</span>
                         <div className="text-[11px] md:text-xs font-bold text-white tracking-tight flex items-center gap-2">
                           {sample.effect}
-                          <span className={`w-1.5 h-1.5 rounded-full ${sample.mode === AugmentationMode.SAFE_PHYSICAL ? 'bg-cyan-500 shadow-[0_0_5px_#06b6d4]' : 'bg-purple-500 shadow-[0_0_5px_rgba(168,85,247,1)]'}`}></span>
+                          <span className={`w-1.5 h-1.5 rounded-full ${sample.mode === AugmentationMode.SAFE_PHYSICAL ? 'bg-cyan-500' : 'bg-purple-500'}`}></span>
                         </div>
                       </div>
                       <button 
@@ -385,59 +456,24 @@ const App: React.FC = () => {
             ) : isGenerating ? (
               <div className="flex-1 flex flex-col items-center justify-center text-slate-500 gap-6 md:gap-8">
                 <div className="relative">
-                  {/* 使用单个 SVG 统一管理背景和进度，确保像素级对齐 */}
                   <svg className="w-32 h-32 md:w-40 md:h-40 overflow-visible" viewBox="0 0 160 160">
-                    {/* 背景环 */}
-                    <circle 
-                      cx="80" cy="80" r={ringRadius} 
-                      fill="transparent" 
-                      stroke="rgba(255,255,255,0.05)" 
-                      strokeWidth="8"
-                    />
-                    {/* 阴影效果使用 filter 定义 */}
-                    <defs>
-                      <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
-                        <feGaussianBlur stdDeviation="4" result="blur" />
-                        <feComposite in="SourceGraphic" in2="blur" operator="over" />
-                      </filter>
-                    </defs>
-                    {/* 进度环 */}
-                    <circle 
-                      cx="80" cy="80" r={ringRadius} 
-                      fill="transparent" 
-                      stroke="#06b6d4" 
-                      strokeWidth="8" 
-                      strokeDasharray={ringCircumference} 
-                      strokeDashoffset={ringCircumference - (ringCircumference * progress / 100)}
-                      strokeLinecap="round"
-                      transform="rotate(-90 80 80)"
-                      className="transition-all duration-700 ease-out"
-                      style={{ filter: 'url(#glow)' }}
-                    />
+                    <circle cx="80" cy="80" r={ringRadius} fill="transparent" stroke="rgba(255,255,255,0.05)" strokeWidth="8"/>
+                    <circle cx="80" cy="80" r={ringRadius} fill="transparent" stroke="#06b6d4" strokeWidth="8" strokeDasharray={ringCircumference} strokeDashoffset={ringCircumference - (ringCircumference * progress / 100)} strokeLinecap="round" transform="rotate(-90 80 80)" className="transition-all duration-700 ease-out"/>
                   </svg>
-                  {/* 中心信息 */}
                   <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-center pointer-events-none">
                     <div className="text-2xl md:text-3xl font-black text-white font-mono tracking-tighter">
                       {Math.round(progress)}<span className="text-[10px] md:text-sm opacity-50">%</span>
                     </div>
-                    <div className="text-[7px] md:text-[8px] text-cyan-500 uppercase font-black tracking-[0.2em] mt-0.5">Transforming</div>
                   </div>
                 </div>
-                
                 <div className="text-center w-full max-w-xs md:max-w-sm px-4 md:px-8">
                   <div className="flex items-center justify-center gap-2 md:gap-3 text-cyan-400 font-bold mb-3 animate-pulse">
                     <Terminal size={14} />
                     <span className="text-[10px] md:text-sm uppercase tracking-widest truncate">{currentTask}</span>
                   </div>
                   <div className="h-1 w-full bg-slate-800 rounded-full overflow-hidden mb-2 border border-white/5">
-                    <div 
-                      className="h-full bg-gradient-to-r from-cyan-600 to-blue-500 transition-all duration-1000 ease-linear shadow-[0_0_8px_rgba(6,182,212,0.6)]"
-                      style={{ width: `${progress}%` }}
-                    />
+                    <div className="h-full bg-gradient-to-r from-cyan-600 to-blue-500 transition-all duration-1000 ease-linear" style={{ width: `${progress}%` }}/>
                   </div>
-                  <p className="text-[9px] md:text-[10px] text-slate-500 font-mono tracking-tighter uppercase">
-                    Progress: {Math.floor(progress / 100 * config.batchSize)} / {config.batchSize} Units
-                  </p>
                 </div>
               </div>
             ) : (
@@ -445,163 +481,143 @@ const App: React.FC = () => {
                 <div className="w-20 h-20 md:w-24 md:h-24 rounded-3xl bg-slate-800/30 border border-slate-700/50 flex items-center justify-center">
                   <Layers size={40} className="text-slate-500" />
                 </div>
-                <p className="text-[10px] md:text-sm font-bold uppercase tracking-widest">Awaiting Command Input</p>
+                <p className="text-[10px] md:text-sm font-bold uppercase tracking-widest">等待上传样本指令</p>
               </div>
             )}
           </section>
-
-          {/* Educational Guidelines - 核心特点说明卡片 */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="glass-card rounded-xl p-4 md:p-5 border-t-2 border-cyan-500/50 shadow-lg hover:bg-white/5 transition-colors group">
-              <h3 className="text-[9px] md:text-[10px] font-black text-cyan-500 uppercase tracking-widest mb-2 flex items-center gap-2">
-                <LayoutGrid size={12} className="group-hover:rotate-45 transition-transform" /> 几何一致性
-              </h3>
-              <p className="text-[10px] md:text-[11px] text-slate-400 leading-relaxed font-medium">
-                物理模式保持了目标的像素坐标绝对不变。这使得您可以使用原始标注直接匹配扩增图，无需重新拉框。
-              </p>
-            </div>
-            <div className="glass-card rounded-xl p-4 md:p-5 border-t-2 border-purple-500/50 shadow-lg hover:bg-white/5 transition-colors group">
-              <h3 className="text-[9px] md:text-[10px] font-black text-purple-500 uppercase tracking-widest mb-2 flex items-center gap-2">
-                <Zap size={12} className="group-hover:scale-125 transition-transform" /> 环境鲁棒性
-              </h3>
-              <p className="text-[10px] md:text-[11px] text-slate-400 leading-relaxed font-medium">
-                通过生成极端天气，能显著提高目标检测模型在极端恶劣工况下的识别准确度。
-              </p>
-            </div>
-            <div className="glass-card rounded-xl p-4 md:p-5 border-t-2 border-blue-500/50 shadow-lg hover:bg-white/5 transition-colors group">
-              <h3 className="text-[9px] md:text-[10px] font-black text-blue-500 uppercase tracking-widest mb-2 flex items-center gap-2">
-                <FileJson size={12} className="group-hover:translate-x-1 transition-transform" /> 数据导出
-              </h3>
-              <p className="text-[10px] md:text-[11px] text-slate-400 leading-relaxed font-medium">
-                结果均以无损 PNG 导出。支持批量下载，无缝对接到 LabelImg 或 CVAT 等标注工具。
-              </p>
-            </div>
-          </div>
         </div>
       </main>
 
-      {/* Viewer Modal */}
       {viewerIndex !== null && samples[viewerIndex] && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/95 backdrop-blur-md animate-in fade-in duration-300 p-4">
-          <button onClick={() => setViewerIndex(null)} className="absolute top-4 md:top-8 right-4 md:right-8 p-2 md:p-3 text-white/50 hover:text-white bg-white/5 rounded-full transition-all border border-white/10 shadow-2xl z-20">
+          <button onClick={() => setViewerIndex(null)} className="absolute top-4 md:top-8 right-4 md:right-8 p-2 md:p-3 text-white/50 hover:text-white bg-white/5 rounded-full transition-all border border-white/10 z-20">
             <X size={20} />
           </button>
           
-          <div className="hidden md:block">
-            <button onClick={() => navigateViewer(-1)} className="absolute left-4 md:left-8 p-4 md:p-6 text-white/20 hover:text-white transition-all active:scale-90 group">
-              <ChevronLeft size={60} className="group-hover:-translate-x-2 transition-transform" />
-            </button>
-            <button onClick={() => navigateViewer(1)} className="absolute right-4 md:right-8 p-4 md:p-6 text-white/20 hover:text-white transition-all active:scale-90 group">
-              <ChevronRight size={60} className="group-hover:translate-x-2 transition-transform" />
-            </button>
-          </div>
-
           <div className="w-full max-w-5xl flex flex-col items-center gap-4 md:gap-8">
             <div className="relative w-full max-h-[60vh] md:max-h-[75vh] flex justify-center group/img">
               <img src={samples[viewerIndex].url} alt={samples[viewerIndex].effect} className="max-w-full max-h-full object-contain rounded-lg shadow-2xl border border-white/10 shadow-cyan-500/10" />
-              
-              {/* Mobile Arrows */}
-              <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 flex justify-between px-2 md:hidden">
-                <button onClick={() => navigateViewer(-1)} className="p-3 bg-black/50 rounded-full text-white backdrop-blur-sm"><ChevronLeft size={24} /></button>
-                <button onClick={() => navigateViewer(1)} className="p-3 bg-black/50 rounded-full text-white backdrop-blur-sm"><ChevronRight size={24} /></button>
-              </div>
             </div>
 
             <div className="w-full flex flex-col sm:flex-row items-center justify-between bg-slate-900/90 p-5 md:p-8 rounded-2xl md:rounded-3xl border border-white/10 shadow-2xl backdrop-blur-xl gap-4">
               <div className="text-center sm:text-left space-y-1">
                 <h3 className="text-xl md:text-2xl font-black text-white tracking-tight uppercase flex flex-wrap items-center justify-center sm:justify-start gap-2 md:gap-3">
                   {samples[viewerIndex].effect}
-                  <span className={`text-[8px] md:text-[10px] px-2 py-0.5 rounded-full ${samples[viewerIndex].mode === AugmentationMode.SAFE_PHYSICAL ? 'bg-cyan-500/20 text-cyan-400' : 'bg-purple-500/20 text-purple-400'}`}>
-                    {samples[viewerIndex].mode === AugmentationMode.SAFE_PHYSICAL ? 'GEOMETRY_SAFE' : 'EXPERIMENTAL_GEN'}
-                  </span>
                 </h3>
-                <p className="text-[9px] md:text-xs text-slate-500 font-mono truncate max-w-[200px] md:max-w-none">HASH: {samples[viewerIndex].id}</p>
+                <p className="text-[9px] md:text-xs text-slate-500 font-mono truncate max-w-[200px] md:max-w-none">ID: {samples[viewerIndex].id}</p>
               </div>
               <button onClick={() => downloadImage(samples[viewerIndex].url, `augmented_${samples[viewerIndex].id}.png`)} className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 md:px-8 py-3 md:py-4 bg-white text-black font-black rounded-xl md:rounded-2xl transition-all hover:bg-cyan-500 hover:text-white active:scale-95 border-none shadow-xl uppercase tracking-tighter text-[11px] md:text-sm">
                 <Download size={18} />
-                Download PNG
+                保存到本地
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Footer Branding - 移动端自适应显示 */}
       <footer className="fixed bottom-0 left-0 right-0 z-30 bg-slate-950/95 backdrop-blur-2xl border-t border-white/10 shadow-[0_-10px_40px_rgba(0,0,0,0.8)]">
         <div className="max-w-[1600px] mx-auto grid grid-cols-2 md:grid-cols-4 divide-x divide-white/5 text-[9px] md:text-[10px] font-mono tracking-tight text-slate-500">
-          
           <div className="px-4 md:px-6 py-3 md:py-4 flex items-center gap-3 md:gap-4 group overflow-hidden">
             <div className="flex-shrink-0 flex items-center justify-center w-7 h-7 md:w-8 md:h-8 rounded-lg bg-green-500/5 border border-green-500/20 group-hover:bg-green-500/10 transition-colors">
               <Activity className="text-green-500 animate-pulse" size={14} />
             </div>
             <div className="truncate">
-              <div className="text-slate-600 uppercase font-black tracking-widest text-[7px] md:text-[8px] mb-0.5">System Status</div>
+              <div className="text-slate-600 uppercase font-black tracking-widest text-[7px] md:text-[8px] mb-0.5">SYSTEM STATUS</div>
               <div className="text-slate-200 font-bold flex items-center gap-2 truncate text-[10px]">
-                ONLINE <span className="w-1.5 h-1.5 rounded-full bg-green-500 shadow-[0_0_8px_#22c55e]"></span>
+                ONLINE <span className="w-1.5 h-1.5 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]"></span>
               </div>
             </div>
           </div>
-
           <div className="px-4 md:px-6 py-3 md:py-4 flex items-center gap-3 md:gap-4 group overflow-hidden">
             <div className="flex-shrink-0 flex items-center justify-center w-7 h-7 md:w-8 md:h-8 rounded-lg bg-cyan-500/5 border border-cyan-500/20 group-hover:bg-cyan-500/10 transition-colors">
-              <Server className="text-cyan-400" size={14} />
+              <Server className="text-cyan-500" size={14} />
             </div>
             <div className="truncate">
-              <div className="text-slate-600 uppercase font-black tracking-widest text-[7px] md:text-[8px] mb-0.5">Intelligence</div>
-              <div className="text-slate-200 font-bold truncate text-[10px]">GEMINI_NATIVE_2.5</div>
+              <div className="text-slate-600 uppercase font-black tracking-widest text-[7px] md:text-[8px] mb-0.5">INTELLIGENCE</div>
+              <div className="text-cyan-400 font-bold truncate text-[10px]">GEMINI_NATIVE_2.5</div>
             </div>
           </div>
-
-          <div className="hidden md:flex px-6 py-4 items-center gap-4 group">
-            <div className="flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-lg bg-indigo-500/5 border border-indigo-500/20 group-hover:bg-indigo-500/10 transition-colors">
+          <div className="hidden md:flex px-4 md:px-6 py-3 md:py-4 items-center gap-3 md:gap-4 group overflow-hidden">
+            <div className="flex-shrink-0 flex items-center justify-center w-7 h-7 md:w-8 md:h-8 rounded-lg bg-indigo-500/5 border border-indigo-500/20 group-hover:bg-indigo-500/10 transition-colors">
               <User className="text-indigo-400" size={14} />
             </div>
-            <div>
-              <div className="text-slate-600 uppercase font-black tracking-widest text-[8px] mb-0.5">Lead Developer</div>
-              <div className="text-indigo-300 font-bold uppercase tracking-widest">zhanght12</div>
+            <div className="truncate">
+              <div className="text-slate-600 uppercase font-black tracking-widest text-[7px] md:text-[8px] mb-0.5">LEAD DEVELOPER</div>
+              <div className="text-indigo-300 font-bold truncate text-[10px]">ZHANGHT12</div>
             </div>
           </div>
-
-          <div className="hidden md:flex px-6 py-4 items-center gap-4 group bg-white/[0.02]">
-            <div className="flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-lg bg-white/5 border border-white/10 group-hover:bg-white/10 transition-colors">
-              <Code className="text-slate-300" size={14} />
+          <div className="hidden md:flex px-4 md:px-6 py-3 md:py-4 items-center gap-3 md:gap-4 group overflow-hidden">
+            <div className="flex-shrink-0 flex items-center justify-center w-7 h-7 md:w-8 md:h-8 rounded-lg bg-slate-800/50 border border-slate-700/50 group-hover:bg-slate-800 transition-colors">
+              <Code className="text-slate-400" size={14} />
             </div>
-            <div className="flex-1 min-w-0">
-              <div className="text-slate-600 uppercase font-black tracking-widest text-[8px] mb-0.5">AI Architecture</div>
-              <div className="text-slate-400 flex items-center gap-3 overflow-hidden">
-                <span className="truncate">React + GenAI SDK</span>
-              </div>
+            <div className="truncate">
+              <div className="text-slate-600 uppercase font-black tracking-widest text-[7px] md:text-[8px] mb-0.5">AI ARCHITECTURE</div>
+              <div className="text-slate-300 font-bold truncate text-[10px]">React + GenAI SDK</div>
             </div>
           </div>
-
         </div>
       </footer>
+
+      {/* Features Section */}
+      <div className="max-w-7xl mx-auto px-4 md:px-6 mt-8 mb-24 grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
+        <div className="glass-card p-5 md:p-6 rounded-2xl border border-cyan-500/20 hover:border-cyan-500/40 transition-colors group">
+          <div className="flex items-center gap-3 mb-3 md:mb-4">
+            <div className="p-2 rounded-lg bg-cyan-500/10 text-cyan-400 group-hover:scale-110 transition-transform">
+              <LayoutGrid size={18} />
+            </div>
+            <h3 className="font-bold text-cyan-400 text-xs md:text-sm tracking-wide">几何一致性</h3>
+          </div>
+          <p className="text-[10px] md:text-xs text-slate-400 leading-relaxed">
+            物理模式保持了目标的像素坐标绝对不变，这使得您可以直接复用原始样本的 YOLO 标注框，无需重新标注。
+          </p>
+        </div>
+        
+        <div className="glass-card p-5 md:p-6 rounded-2xl border border-purple-500/20 hover:border-purple-500/40 transition-colors group">
+          <div className="flex items-center gap-3 mb-3 md:mb-4">
+            <div className="p-2 rounded-lg bg-purple-500/10 text-purple-400 group-hover:scale-110 transition-transform">
+              <Zap size={18} />
+            </div>
+            <h3 className="font-bold text-purple-400 text-xs md:text-sm tracking-wide">环境鲁棒性</h3>
+          </div>
+          <p className="text-[10px] md:text-xs text-slate-400 leading-relaxed">
+            通过生成极端天气，能显著提高目标检测模型在雨雪雾等恶劣工况下的识别率，降低漏检率。
+          </p>
+        </div>
+
+        <div className="glass-card p-5 md:p-6 rounded-2xl border border-blue-500/20 hover:border-blue-500/40 transition-colors group">
+          <div className="flex items-center gap-3 mb-3 md:mb-4">
+            <div className="p-2 rounded-lg bg-blue-500/10 text-blue-400 group-hover:scale-110 transition-transform">
+              <FileJson size={18} />
+            </div>
+            <h3 className="font-bold text-blue-400 text-xs md:text-sm tracking-wide">数据导出</h3>
+          </div>
+          <p className="text-[10px] md:text-xs text-slate-400 leading-relaxed">
+            结果均以无损 PNG 导出。支持批量下载，直接放到 YOLO 的 images 文件夹下即可参与训练。
+          </p>
+        </div>
+      </div>
 
       <style>{`
         .custom-scrollbar::-webkit-scrollbar { width: 3px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 10px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #334155; }
         .animate-spin-slow { animation: spin 8s linear infinite; }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-        
-        /* 移动端特殊滑块样式 */
-        @media (max-width: 640px) {
-          input[type=range] { height: 24px; }
-          input[type=range]::-webkit-slider-thumb {
-            height: 20px;
-            width: 20px;
-            background: #06b6d4;
-            border-radius: 50%;
-            cursor: pointer;
-            -webkit-appearance: none;
-            margin-top: -8px;
-            box-shadow: 0 0 10px rgba(6, 182, 212, 0.4);
-          }
-        }
+        details > summary { list-style: none; }
+        details > summary::-webkit-details-marker { display: none; }
       `}</style>
     </div>
   );
 };
+
+// 补齐缺失的 Lucide 图标引用
+const Calendar = ({ size, className }: any) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+    <line x1="16" y1="2" x2="16" y2="6" />
+    <line x1="8" y1="2" x2="8" y2="6" />
+    <line x1="3" y1="10" x2="21" y2="10" />
+  </svg>
+);
 
 export default App;
